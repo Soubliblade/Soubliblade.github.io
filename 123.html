@@ -1,0 +1,454 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="initial-scale=1,maximum-scale=1,user-scalable=no" />
+  <title>2024中国城市气温 · 时序地图</title>
+
+  <link rel="stylesheet" href="https://js.arcgis.com/4.32/esri/themes/light/main.css" />
+  <script src="https://js.arcgis.com/4.32/"></script>
+
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    html, body {
+      height: 100%;
+      width: 100%;
+      background: #eef2f5;
+      font-family: 'Inter', 'Segoe UI', 'PingFang SC', Roboto, system-ui, sans-serif;
+    }
+
+    .app-wrapper {
+      display: flex;
+      flex-direction: column;
+      height: 100%;
+      width: 100%;
+      padding: 16px;
+      background: #eef2f5;
+    }
+
+    /* 页眉 - 现代玻璃风格 */
+    #header {
+      height: 76px;
+      background: rgba(255, 255, 255, 0.8);
+      backdrop-filter: blur(16px);
+      border-radius: 24px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.04);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 28px;
+      margin-bottom: 16px;
+      border: 1px solid rgba(255, 255, 255, 0.6);
+    }
+
+    .logo-area {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .logo-area .icon {
+      font-size: 2rem;
+    }
+
+    .title-text h1 {
+      font-size: 1.5rem;
+      font-weight: 600;
+      background: linear-gradient(135deg, #1e6f5c, #289672);
+      background-clip: text;
+      -webkit-background-clip: text;
+      color: transparent;
+    }
+
+    .title-text p {
+      font-size: 0.7rem;
+      color: #5a6874;
+      margin-top: 2px;
+    }
+
+    .badge {
+      background: rgba(30, 111, 92, 0.12);
+      border-radius: 40px;
+      padding: 6px 16px;
+      font-size: 0.75rem;
+      font-weight: 500;
+      color: #1e6f5c;
+    }
+
+    /* 主体：地图 + 侧边栏（无重叠） */
+    #main-content {
+      display: flex;
+      flex: 1;
+      overflow: hidden;
+      border-radius: 24px;
+      background: #ffffff;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.06);
+      gap: 0;
+    }
+
+    /* 地图容器 - 自动占据剩余宽度 */
+    #viewDiv {
+      flex: 1;
+      border-radius: 24px 0 0 24px;
+      overflow: hidden;
+      position: relative;
+      background: #eef2f5;
+    }
+
+    /* 右侧底图面板 - 固定宽度，与地图无重叠 */
+    #basemapContainer {
+      width: 280px;
+      background: #fefef7;
+      border-left: 1px solid #e9edf2;
+      padding: 20px 14px;
+      overflow-y: auto;
+      border-radius: 0 24px 24px 0;
+      box-shadow: -2px 0 8px rgba(0, 0, 0, 0.02);
+    }
+
+    .sidebar-title {
+      font-weight: 600;
+      font-size: 1rem;
+      color: #2c4b3e;
+      padding-bottom: 12px;
+      margin-bottom: 18px;
+      border-bottom: 2px solid #dee9e4;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .sidebar-title::before {
+      content: "🗺️";
+      font-size: 1rem;
+    }
+
+    /* 底图图库卡片样式 */
+    .esri-basemap-gallery {
+      background: transparent !important;
+    }
+    .esri-basemap-gallery__item {
+      background: #ffffff;
+      border-radius: 14px;
+      margin-bottom: 10px;
+      border: 1px solid #e2e8f0;
+      transition: all 0.2s;
+    }
+    .esri-basemap-gallery__item:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 4px 10px rgba(0,0,0,0.05);
+    }
+    .esri-basemap-gallery__item--selected {
+      background: #e0f0ea;
+      border-color: #289672;
+    }
+
+    /* 图层按钮 - 右上角，无重叠 */
+    .custom-layer-btn {
+      position: absolute;
+      top: 16px;
+      right: 16px;
+      width: 40px;
+      height: 40px;
+      background: white;
+      border-radius: 40px;
+      cursor: pointer;
+      z-index: 100;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 2px 12px rgba(0, 0, 0, 0.12);
+      border: none;
+      transition: 0.2s;
+    }
+    .custom-layer-btn:hover {
+      background: #f0f7f4;
+      transform: scale(1.02);
+    }
+    .hamburger-icon {
+      width: 18px;
+      height: 14px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+    }
+    .hamburger-icon span {
+      height: 2px;
+      background: #2c5e4c;
+      border-radius: 2px;
+    }
+
+    /* 浮动图层面板 - 出现在按钮下方，不与其他控件重叠 */
+    .layer-float-panel {
+      position: absolute;
+      top: 68px;
+      right: 16px;
+      width: 260px;
+      max-height: 380px;
+      background: rgba(255, 255, 255, 0.98);
+      backdrop-filter: blur(12px);
+      border-radius: 20px;
+      border: 1px solid rgba(0,0,0,0.08);
+      box-shadow: 0 12px 28px rgba(0, 0, 0, 0.15);
+      z-index: 99;
+      display: none;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    .layer-float-panel.show {
+      display: flex;
+    }
+    .panel-header {
+      padding: 12px 16px;
+      background: rgba(40, 150, 114, 0.06);
+      border-bottom: 1px solid #eef2f5;
+      font-weight: 600;
+      color: #1a5a48;
+    }
+    .layer-content {
+      flex: 1;
+      overflow-y: auto;
+      padding: 8px 0;
+    }
+    .layer-content .esri-layer-list__item {
+      background: #fafcfb;
+      border-radius: 12px;
+      margin: 6px 12px;
+      border: 1px solid #e2ece8;
+    }
+
+    /* 时间轴容器 - 底部居中，避免与侧边栏和图例重叠 */
+    .time-slider-container {
+      position: absolute;
+      bottom: 24px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: auto;
+      min-width: 320px;
+      max-width: 520px;
+      background: rgba(255, 255, 255, 0.94);
+      backdrop-filter: blur(12px);
+      border-radius: 48px;
+      padding: 10px 20px;
+      z-index: 99;
+      box-shadow: 0 6px 20px rgba(0, 0, 0, 0.1);
+      border: 1px solid rgba(255,255,255,0.6);
+      pointer-events: auto;
+    }
+    .time-slider-title {
+      color: #2c4b3e;
+      font-size: 0.7rem;
+      font-weight: 600;
+      margin-bottom: 6px;
+      text-align: center;
+      letter-spacing: 0.3px;
+    }
+
+    /* 调整时间轴内部样式 */
+    .esri-time-slider {
+      --calcite-color-brand: #289672;
+    }
+    .esri-time-slider__time-extent {
+      color: #1f5e4c !important;
+    }
+
+    /* 搜索框移至左上角，避免与图层按钮重叠 */
+    .esri-search {
+      border-radius: 32px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    }
+
+    /* 图例与比例尺 - 调整位置防止与时间轴重叠 */
+    .esri-legend {
+      background: rgba(255,255,255,0.9) !important;
+      border-radius: 16px !important;
+      border: none !important;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.08) !important;
+      padding: 6px 10px !important;
+      margin-bottom: 60px !important;  /* 给时间轴留出空间 */
+    }
+    .esri-scale-bar {
+      background: rgba(255,255,255,0.7);
+      border-radius: 20px;
+      padding: 2px 8px;
+      margin-bottom: 60px !important;
+    }
+
+    /* 响应式：小屏幕时调整侧边栏宽度 */
+    @media (max-width: 800px) {
+      #basemapContainer {
+        width: 240px;
+      }
+      .time-slider-container {
+        min-width: 260px;
+        max-width: 400px;
+        padding: 8px 16px;
+      }
+    }
+    @media (max-width: 700px) {
+      .time-slider-container {
+        bottom: 12px;
+        width: 90%;
+      }
+      .esri-legend, .esri-scale-bar {
+        margin-bottom: 70px;
+      }
+    }
+  </style>
+</head>
+<body>
+<div class="app-wrapper">
+  <div id="header">
+    <div class="logo-area">
+      <span class="icon">🌿</span>
+      <div class="title-text">
+        <h1>2024 · 城市气温纪事</h1>
+        <p>主要城市月均气温 | 滑动时间轴 · 切换底图</p>
+      </div>
+    </div>
+    <div class="badge">
+      🌡️ 逐月气温动态
+    </div>
+  </div>
+
+  <div id="main-content">
+    <div id="viewDiv">
+      <!-- 图层按钮与浮动面板 -->
+      <div class="custom-layer-btn" id="layerToggleBtn">
+        <div class="hamburger-icon"><span></span><span></span><span></span></div>
+      </div>
+      <div id="layerFloatPanel" class="layer-float-panel">
+        <div class="panel-header">📌 图层管理</div>
+        <div id="layerListContainer" class="layer-content"></div>
+      </div>
+      <div id="timeSliderContainer" class="time-slider-container"></div>
+    </div>
+    <div id="basemapContainer">
+      <div class="sidebar-title">底图库</div>
+      <div id="galleryDiv"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+  require([
+    "esri/Map",
+    "esri/views/MapView",
+    "esri/layers/FeatureLayer",
+    "esri/widgets/ScaleBar",
+    "esri/widgets/Legend",
+    "esri/widgets/Search",
+    "esri/widgets/LayerList",
+    "esri/widgets/BasemapGallery",
+    "esri/widgets/TimeSlider"
+  ], function(Map, MapView, FeatureLayer, ScaleBar, Legend, Search, LayerList, BasemapGallery, TimeSlider) {
+
+    // 气温图层
+    const temperatureLayer = new FeatureLayer({
+      url: "https://www.geosceneonline.cn/server/rest/services/Hosted/主要城市气温/FeatureServer",
+      title: "2024年中国主要城市气温",
+      useViewTime: true,
+      popupTemplate: {
+        title: "{CityName}",
+        content: [
+          { type: "fields", fieldInfos: [
+              { fieldName: "CityName", label: "城市" },
+              { fieldName: "Temperature", label: "气温 (℃)" },
+              { fieldName: "Date", label: "日期" }
+            ] }
+        ]
+      }
+    });
+
+    const map = new Map({
+      basemap: "arcgis-light-gray",
+      layers: [temperatureLayer]
+    });
+
+    const view = new MapView({
+      container: "viewDiv",
+      map: map,
+      center: [104.0, 35.0],
+      zoom: 5
+    });
+
+    // 添加控件：比例尺、图例、搜索框（移动到左上角）
+    view.ui.add(new ScaleBar({ view: view, unit: "metric" }), "bottom-left");
+    view.ui.add(new Legend({ view: view }), "bottom-right");
+    // 将搜索框添加到左上角，避免与图层按钮重叠
+    const searchWidget = new Search({ view: view });
+    view.ui.add(searchWidget, "top-left");
+
+    // 底图库
+    new BasemapGallery({ view: view, container: "galleryDiv" });
+
+    // 图层列表（浮动窗）
+    const toggleBtn = document.getElementById("layerToggleBtn");
+    const floatPanel = document.getElementById("layerFloatPanel");
+    const layerListContainer = document.getElementById("layerListContainer");
+    let layerListWidget = null;
+
+    function initLayerList() {
+      if (layerListWidget) return;
+      layerListWidget = new LayerList({ view: view, container: layerListContainer });
+    }
+
+    toggleBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      initLayerList();
+      floatPanel.classList.toggle("show");
+    });
+    view.on("click", (event) => {
+      if (floatPanel.classList.contains("show")) {
+        const target = event.nativeEvent.target;
+        if (!floatPanel.contains(target) && target !== toggleBtn && !toggleBtn.contains(target)) {
+          floatPanel.classList.remove("show");
+        }
+      }
+    });
+    floatPanel.addEventListener("click", (e) => e.stopPropagation());
+
+    // 时间轴逻辑
+    temperatureLayer.load().then(() => {
+      if (temperatureLayer.timeInfo && temperatureLayer.timeInfo.fullTimeExtent) {
+        const fullExtent = temperatureLayer.timeInfo.fullTimeExtent;
+        view.timeExtent = fullExtent;
+
+        const timeSlider = new TimeSlider({
+          container: "timeSliderContainer",
+          view: view,
+          mode: "time-window",
+          fullTimeExtent: fullExtent,
+          stops: { interval: { value: 1, unit: "months" } },
+          loop: false,
+          playRate: 1000,
+          labelFormat: "short-month-day-year",
+          layout: "wide"
+        });
+        timeSlider.startup();
+
+        const titleDiv = document.createElement("div");
+        titleDiv.className = "time-slider-title";
+        titleDiv.textContent = "📆 拖动时间轴 · 查看2024逐月气温变化";
+        const containerDiv = document.getElementById("timeSliderContainer");
+        if (containerDiv.firstChild && containerDiv.firstChild.classList?.contains('time-slider-title')) {
+          containerDiv.removeChild(containerDiv.firstChild);
+        }
+        containerDiv.insertBefore(titleDiv, containerDiv.firstChild);
+      } else {
+        document.getElementById("timeSliderContainer").innerHTML = `<div style="color:#b85c00; text-align:center;">⏱️ 气温数据未包含时间字段，时间轴暂不可用</div>`;
+      }
+    }).catch(err => {
+      console.error(err);
+      document.getElementById("timeSliderContainer").innerHTML = `<div style="color:#c23b22; text-align:center;">⚠️ 气温服务连接失败</div>`;
+    });
+
+    view.when(() => console.log("地图已就绪，布局无重叠"));
+  });
+</script>
+</body>
+</html>
